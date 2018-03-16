@@ -16,3 +16,6 @@ services:
     image: 'bitnami/mariadb:latest'
     environment:
       - ALLOW_EMPTY_PASSWORD=yes
+      - MARIADB_DATABASE=myapp
+    volumes:
+      - /tmp:/bitnami
