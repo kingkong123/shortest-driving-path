@@ -10,6 +10,8 @@ services:
       - '.:/app'
     depends_on:
       - mariadb
+    env_file:
+      - ./.env
   mariadb:
     image: 'bitnami/mariadb:latest'
     environment:
