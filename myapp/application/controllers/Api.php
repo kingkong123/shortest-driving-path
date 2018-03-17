@@ -11,9 +11,7 @@ class Api extends CI_Controller {
 
 	public function index()
 	{
-		echo getenv('GOOGLE_MAPS_API');
-		
-		$this->load->view('welcome_message');
+		show_404();
 	}
 
 	public function route($token = false) {
@@ -23,13 +21,11 @@ class Api extends CI_Controller {
 			$inputBody = file_get_contents('php://input');
 
 			if($inputBody && $routes = @json_decode($inputBody)){
-				print_r($routes);
-
 				$token = md5(json_encode($routes));
 
 				$tokenExists = $this->routes_model->tokenExists($token);
 
-				if(!$tokenExists['exists'] || $tokenExists['error'] !== ''){
+				if(!$tokenExists['exists'] || trim($tokenExists['error']) !== ''){
 					$routeResult = $this->_getRoutes($routes);
 
 					if($routeResult['error'] != ''){
