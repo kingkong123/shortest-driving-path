@@ -115,6 +115,10 @@ class Api extends CI_Controller {
 							if($element['status'] == 'OK'){
 								$distance += (int) $element['distance']['value'];
 								$duration += (int) $element['duration']['value'];
+							}else{
+								if(strpos($result['error'], $element['status']) === false){
+									$result['error'] .= $element['status'] . ' ';
+								}
 							}
 						}
 					}
@@ -122,6 +126,8 @@ class Api extends CI_Controller {
 					$result['error'] = $result['status'];
 				}
 			}
+
+			$result['error'] = trim($result['error']);
 
 			$result['distance'] = $distance;
 			$result['time'] = $duration;
