@@ -123,7 +123,11 @@ class Api extends CI_Controller {
 						}
 					}
 				}else{
-					$result['error'] = $result['status'];
+					if(isset($json['error_message'])){
+						$result['error'] = $json['error_message'];
+					}else{
+						$result['error'] = $json['status'];
+					}
 				}
 			}
 
