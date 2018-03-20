@@ -3,6 +3,7 @@
 ## Installation (required Docker)
  - download the source code from this repo
  - navigate into the root directory of the source in the terminal
+ - create a Google API Key with Google Maps Directions API and Google Maps Distance Matrix API enabled
  - create a ``` .env ``` file to store the Google API Key by following the example from ``` .env.example ```
  - run ``` docker-compose up -d ```
 
