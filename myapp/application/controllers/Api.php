@@ -118,23 +118,25 @@ class Api extends CI_Controller {
 			'error' => ''
 		];
 
-		$origins = $destinations = '';
+		$origins = '';
+		$destinations = $waypoints = [];
 
-		foreach($routes as $key => $route){
-			if(is_array($route) && sizeof($route) == 2){
+		if(sizeof($routes) == 2){
+			$origins = ((float) $routes[0][0]) . ',' . ((float) $routes[0][1]);
+			$destinations[] = ((float) $routes[1][0]) . ',' . ((float) $routes[1][1]);
+		}else{
+			foreach($routes as $key => $route){
 				if($key === 0){
 					$origins = ((float) $route[0]) . ',' . ((float) $route[1]);
 				}else{
-					if($destinations != ''){
-						$destinations .= '|';
-					}
+					$destinations[] = ((float) $route[0]) . ',' . ((float) $route[1]);
 
-					$destinations .= ((float) $route[0]) . ',' . ((float) $route[1]);
+					$waypoints[] = $this->_buildWaypoint($key, $routes);
 				}
 			}
 		}
 
-		if($origins && $destinations){
+		if(empty($waypoints)){
 			$distance = $duration = 0;
 
 			$url = 'https://maps.googleapis.com/maps/api/distancematrix/json?';
@@ -142,7 +144,7 @@ class Api extends CI_Controller {
 			$url .= http_build_query([
 				'units' => 'metric',
 				'origins' => $origins,
-				'destinations' => $destinations,
+				'destinations' => $destinations[0],
 				'key' => getenv('GOOGLE_MAPS_API')
 			]);
 
@@ -183,9 +185,102 @@ class Api extends CI_Controller {
 
 			$result['distance'] = $distance;
 			$result['time'] = $duration;
+		}else{
+			$distance = $duration = false;
+
+			$routeResults = [];
+
+			$url = 'https://maps.googleapis.com/maps/api/directions/json?';
+
+			foreach($destinations as $key => $dest){
+				$query =  http_build_query([
+					'units' => 'metric',
+					'origin' => $origins,
+					'destination' => $dest,
+					'waypoints' => 'optimize:true|' . $waypoints[$key],
+					'key' => getenv('GOOGLE_MAPS_API')
+				]);
+
+				$resource = file_get_contents($url . $query);
+
+				if($resource === false){
+					$routeResults['error'][$key] = 'CONNECTION_ERROR';
+				}else{
+					$json = json_decode($resource, true);
+
+					if($json === null && json_last_error() !== JSON_ERROR_NONE){
+						$routeResults['error'][$key] = $this->_getJsonError(json_last_error());
+					}else{
+						if($json['status'] == 'OK'){
+							$legs = $json['routes'][0]['legs'];
+
+							$routeResults[$key]['distance'] = $this->_calcLegsParam($legs, 'distance');
+
+							$routeResults[$key]['duration'] = $this->_calcLegsParam($legs, 'duration');
+						}else{
+							if(isset($json['error_message'])){
+								$routeResults[$key]['error'] = $json['error_message'];
+							}else{
+								$routeResults[$key]['error'] = $json['status'];
+							}
+						}
+					}
+				}
+			}
+
+			foreach($routeResults as $key => $routeResult){
+				if(isset($routeResult['distance'])){
+					if($distance === false || $distance > $routeResult['distance']){
+						$distance = $routeResult['distance'];
+						$duration = $routeResult['duration'];
+					}
+				}
+			}
+
+			if($distance && $duration){
+				$result['distance'] = $distance;
+				$result['time'] = $duration;
+			}else{
+				$errors = array_unique(array_map(function($item){
+					return (int) $item['error'];
+				}, $routeResults));
+
+				$result['errors'] = implode(' ', $errors);
+			}
 		}
 
 		return $result;
+	}
+
+	private function _buildWaypoint($index, $routes){
+		$waypoints = '';
+
+		foreach($routes as $key => $route){
+			if($key == 0 || $key == $index){
+				continue;
+			}
+
+			if($waypoints != ''){
+				$waypoints .= '|';
+			}
+
+			$waypoints .= ((float) $route[0]) . ',' . ((float) $route[1]);
+		}
+
+		return $waypoints;
+	}
+
+	private function _calcLegsParam($legs, $key){
+		if($key == 'duration'){
+			return array_sum(array_map(function($item){
+				return (int) $item['duration']['value'];
+			}, $legs));
+		}else if($key == 'distance'){
+			return array_sum(array_map(function($item){
+				return (int) $item['distance']['value'];
+			}, $legs));
+		}
+		
 	}
 
 	private function _getRouteByToken($token = false){
