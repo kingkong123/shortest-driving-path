@@ -12,6 +12,11 @@ class Routes_model extends CI_Model {
 	}
 
 	public function insertRoute($data = []){
+		if(isset($data['id'])){
+			return $this->db->where('id', $data['id'])
+				->replace('routes', $data);
+		}
+
 		return $this->db->where('token', $data['token'])
 			->replace('routes', $data);
 	}
@@ -23,6 +28,7 @@ class Routes_model extends CI_Model {
 			if($result){
 				return [
 					'exists' => true,
+					'id' => $result['id'],
 					'error' => $result['error']
 				];
 			}
