@@ -20,8 +20,15 @@ class Api extends CI_Controller {
 		if(!$token){
 			$inputBody = file_get_contents('php://input');
 
-			if($inputBody && $routes = @json_decode($inputBody)){
-				$result = $this->_processRoute($routes);
+			if($inputBody){
+
+				$validate = $this->_validateInput($inputBody);
+
+				if($validate['success']){
+					$result = $this->_processRoute($validate['data']);
+				}else{
+					$result['error'] = $validate['error'];
+				}
 			}
 		}else{
 			$result = $this->_getRouteByToken($token);
@@ -29,6 +36,70 @@ class Api extends CI_Controller {
 
 		header('Content-Type: application/json');
 		echo json_encode( $result );
+	}
+
+	private function _validateInput($inputBody){
+		$result = ['success' => false];
+
+		$routes = json_decode($inputBody, true);
+
+		if($routes === null && json_last_error() !== JSON_ERROR_NONE){
+			$result['error'] = json_last_error();
+
+			switch (json_last_error()) {
+		        case JSON_ERROR_DEPTH:
+		            $result['error'] = 'JSON_ERROR_DEPTH';
+		        	break;
+
+		        case JSON_ERROR_STATE_MISMATCH:
+		            $result['error'] = 'JSON_ERROR_STATE_MISMATCH';
+		        	break;
+
+		        case JSON_ERROR_CTRL_CHAR:
+		            $result['error'] = 'JSON_ERROR_CTRL_CHAR';
+		        	break;
+
+		        case JSON_ERROR_SYNTAX:
+		            $result['error'] = 'JSON_ERROR_SYNTAX';
+		        	break;
+
+		        case JSON_ERROR_UTF8:
+		            $result['error'] = 'JSON_ERROR_UTF8';
+		        	break;
+
+		        default:
+		            $result['error'] = 'UNKNOWN_JSON_ERROR';
+		        	break;
+		    }
+		}
+
+		if($routes && !isset($result['error'])){
+			if(sizeof($routes) > 1){
+				$newRoutes = array_map(function($item){
+					if(sizeof($item) == 2){
+						$latlng = array_values($item);
+
+						if(is_numeric($latlng[0]) && (((float) $latlng[0]) == $latlng[0])
+							&& is_numeric($latlng[1]) && (((float) $latlng[1]) == $latlng[1])){
+							return 1;
+						}
+					}
+
+					return 0;
+				}, $routes);
+
+				if(array_sum($newRoutes) == sizeof($newRoutes)){
+					$result['success'] = true;
+					$result['data'] = $routes;
+				}else{
+					$result['error'] = 'INVALID_INPUT';
+				}
+			}else{
+				$result['error'] = 'MISSING_DESTINATION';
+			}
+		}
+
+		return $result;
 	}
 
 	private function _processRoute($routes){
