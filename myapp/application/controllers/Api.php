@@ -21,54 +21,45 @@ class Api extends CI_Controller {
 			$inputBody = file_get_contents('php://input');
 
 			if($inputBody && $routes = @json_decode($inputBody)){
-				$token = md5(json_encode($routes));
-
-				$tokenExists = $this->routes_model->tokenExists($token);
-
-				if(!$tokenExists['exists'] || trim($tokenExists['error']) !== ''){
-					$routeResult = $this->_getRoutes($routes);
-
-					if($routeResult['error'] != ''){
-						$result['error'] = $routeResult['error'];
-
-						$routeResult['status'] = 'failure';
-					}else{
-						$routeResult['status'] = 'success';
-					}
-
-					$routeResult['token'] = $token;
-					$routeResult['latlngs'] = json_encode($routes);
-
-					$this->routes_model->insertRoute($routeResult);
-				}
-
-				if(!isset($result['error'])){
-					$result['token'] = $token;
-				}
+				$result = $this->_processRoute($routes);
 			}
 		}else{
-			$tokenExists = $this->routes_model->tokenExists($token);
-
-			if($tokenExists['exists'] && $tokenExists['error'] == ''){
-				$dbResult = $this->routes_model->getByToken($token);
-
-				if($dbResult['status'] == 'success'){
-					$result['status'] = $dbResult['status'];
-					$result['path'] = json_decode($dbResult['latlngs']);
-					$result['total_distance'] = $dbResult['distance'];
-					$result['total_time'] = $dbResult['time'];
-				}
-			}else if($tokenExists['error']){
-				$result['status'] = 'failure';
-				$result['error'] = $tokenExists['error'];
-			}else{
-				$result['status'] = 'failure';
-				$result['error'] = 'TOKEN_NOT_EXISTS';
-			}
+			$result = $this->_getRouteByToken($token);
 		}
 
 		header('Content-Type: application/json');
 		echo json_encode( $result );
+	}
+
+	private function _processRoute($routes){
+		$result = [];
+
+		$token = md5(json_encode($routes));
+
+		$tokenExists = $this->routes_model->tokenExists($token);
+
+		if(!$tokenExists['exists'] || trim($tokenExists['error']) !== ''){
+			$routeResult = $this->_getRoutes($routes);
+
+			if($routeResult['error'] != ''){
+				$result['error'] = $routeResult['error'];
+
+				$routeResult['status'] = 'failure';
+			}else{
+				$routeResult['status'] = 'success';
+			}
+
+			$routeResult['token'] = $token;
+			$routeResult['latlngs'] = json_encode($routes);
+
+			$this->routes_model->insertRoute($routeResult);
+		}
+
+		if(!isset($result['error'])){
+			$result['token'] = $token;
+		}
+
+		return $result;
 	}
 
 	private function _getRoutes($routes){
@@ -135,6 +126,31 @@ class Api extends CI_Controller {
 
 			$result['distance'] = $distance;
 			$result['time'] = $duration;
+		}
+
+		return $result;
+	}
+
+	private function _getRouteByToken($token = false){
+		$result = [];
+
+		$tokenExists = $this->routes_model->tokenExists($token);
+
+		if($tokenExists['exists'] && $tokenExists['error'] == ''){
+			$dbResult = $this->routes_model->getByToken($token);
+
+			if($dbResult['status'] == 'success'){
+				$result['status'] = $dbResult['status'];
+				$result['path'] = json_decode($dbResult['latlngs']);
+				$result['total_distance'] = $dbResult['distance'];
+				$result['total_time'] = $dbResult['time'];
+			}
+		}else if($tokenExists['error']){
+			$result['status'] = 'failure';
+			$result['error'] = $tokenExists['error'];
+		}else{
+			$result['status'] = 'failure';
+			$result['error'] = 'TOKEN_NOT_EXISTS';
 		}
 
 		return $result;
