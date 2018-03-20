@@ -97,6 +97,10 @@ class Api extends CI_Controller {
 			$routeResult['token'] = $token;
 			$routeResult['latlngs'] = json_encode($routes);
 
+			if(isset($tokenExists['id'])){
+				$routeResult['id'] = $tokenExists['id'];
+			}
+
 			$this->routes_model->insertRoute($routeResult);
 		}
 
