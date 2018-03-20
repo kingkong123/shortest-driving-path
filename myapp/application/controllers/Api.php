@@ -44,33 +44,7 @@ class Api extends CI_Controller {
 		$routes = json_decode($inputBody, true);
 
 		if($routes === null && json_last_error() !== JSON_ERROR_NONE){
-			$result['error'] = json_last_error();
-
-			switch (json_last_error()) {
-		        case JSON_ERROR_DEPTH:
-		            $result['error'] = 'JSON_ERROR_DEPTH';
-		        	break;
-
-		        case JSON_ERROR_STATE_MISMATCH:
-		            $result['error'] = 'JSON_ERROR_STATE_MISMATCH';
-		        	break;
-
-		        case JSON_ERROR_CTRL_CHAR:
-		            $result['error'] = 'JSON_ERROR_CTRL_CHAR';
-		        	break;
-
-		        case JSON_ERROR_SYNTAX:
-		            $result['error'] = 'JSON_ERROR_SYNTAX';
-		        	break;
-
-		        case JSON_ERROR_UTF8:
-		            $result['error'] = 'JSON_ERROR_UTF8';
-		        	break;
-
-		        default:
-		            $result['error'] = 'UNKNOWN_JSON_ERROR';
-		        	break;
-		    }
+			$result['error'] = $this->_getJsonError(json_last_error());
 		}
 
 		if($routes && !isset($result['error'])){
@@ -168,27 +142,35 @@ class Api extends CI_Controller {
 				'key' => getenv('GOOGLE_MAPS_API')
 			]);
 
-			$resource = @file_get_contents($url);
+			$resource = file_get_contents($url);
 
-			if($resource && $json = @json_decode($resource, true)){
-				if($json['status'] == 'OK'){
-					foreach($json['rows'] as $row){
-						foreach($row['elements'] as $element){
-							if($element['status'] == 'OK'){
-								$distance += (int) $element['distance']['value'];
-								$duration += (int) $element['duration']['value'];
-							}else{
-								if(strpos($result['error'], $element['status']) === false){
-									$result['error'] .= $element['status'] . ' ';
+			if($resource === false){
+				$result['error'] = 'CONNECTION_ERROR';
+			}else{
+				$json = json_decode($resource, true);
+
+				if($json === null && json_last_error() !== JSON_ERROR_NONE){
+					$result['error'] = $this->_getJsonError(json_last_error());
+				}else{
+					if($json['status'] == 'OK'){
+						foreach($json['rows'] as $row){
+							foreach($row['elements'] as $element){
+								if($element['status'] == 'OK'){
+									$distance += (int) $element['distance']['value'];
+									$duration += (int) $element['duration']['value'];
+								}else{
+									if(strpos($result['error'], $element['status']) === false){
+										$result['error'] .= $element['status'] . ' ';
+									}
 								}
 							}
 						}
-					}
-				}else{
-					if(isset($json['error_message'])){
-						$result['error'] = $json['error_message'];
 					}else{
-						$result['error'] = $json['status'];
+						if(isset($json['error_message'])){
+							$result['error'] = $json['error_message'];
+						}else{
+							$result['error'] = $json['status'];
+						}
 					}
 				}
 			}
@@ -225,5 +207,33 @@ class Api extends CI_Controller {
 		}
 
 		return $result;
+	}
+
+	private function _getJsonError($last_error){
+		switch ($last_error) {
+	        case JSON_ERROR_DEPTH:
+	            return 'JSON_ERROR_DEPTH';
+	        	break;
+
+	        case JSON_ERROR_STATE_MISMATCH:
+	            return 'JSON_ERROR_STATE_MISMATCH';
+	        	break;
+
+	        case JSON_ERROR_CTRL_CHAR:
+	            return 'JSON_ERROR_CTRL_CHAR';
+	        	break;
+
+	        case JSON_ERROR_SYNTAX:
+	            return 'JSON_ERROR_SYNTAX';
+	        	break;
+
+	        case JSON_ERROR_UTF8:
+	            return 'JSON_ERROR_UTF8';
+	        	break;
+
+	        default:
+	            return 'UNKNOWN_JSON_ERROR';
+	        	break;
+	    }
 	}
 }
