@@ -121,132 +121,76 @@ class Api extends CI_Controller {
 		$origins = '';
 		$destinations = $waypoints = [];
 
-		if(sizeof($routes) == 2){
-			$origins = ((float) $routes[0][0]) . ',' . ((float) $routes[0][1]);
-			$destinations[] = ((float) $routes[1][0]) . ',' . ((float) $routes[1][1]);
-		}else{
-			foreach($routes as $key => $route){
-				if($key === 0){
-					$origins = ((float) $route[0]) . ',' . ((float) $route[1]);
-				}else{
-					$destinations[] = ((float) $route[0]) . ',' . ((float) $route[1]);
+		foreach($routes as $key => $route){
+			if($key === 0){
+				$origins = ((float) $route[0]) . ',' . ((float) $route[1]);
+			}else{
+				$destinations[] = ((float) $route[0]) . ',' . ((float) $route[1]);
 
-					$waypoints[] = $this->_buildWaypoint($key, $routes);
-				}
+				$waypoints[] = $this->_buildWaypoint($key, $routes);
 			}
 		}
+		
+		$distance = $duration = false;
 
-		if(empty($waypoints)){
-			$distance = $duration = 0;
+		$routeResults = [];
 
-			$url = 'https://maps.googleapis.com/maps/api/distancematrix/json?';
+		$url = 'https://maps.googleapis.com/maps/api/directions/json?';
 
-			$url .= http_build_query([
+		foreach($destinations as $key => $dest){
+			$query =  http_build_query([
 				'units' => 'metric',
-				'origins' => $origins,
-				'destinations' => $destinations[0],
+				'origin' => $origins,
+				'destination' => $dest,
+				'waypoints' => isset($waypoints[$key])? ('optimize:true|' . $waypoints[$key]): '',
 				'key' => getenv('GOOGLE_MAPS_API')
 			]);
 
-			$resource = file_get_contents($url);
+			$resource = file_get_contents($url . $query);
 
 			if($resource === false){
-				$result['error'] = 'CONNECTION_ERROR';
+				$routeResults['error'][$key] = 'CONNECTION_ERROR';
 			}else{
 				$json = json_decode($resource, true);
 
 				if($json === null && json_last_error() !== JSON_ERROR_NONE){
-					$result['error'] = $this->_getJsonError(json_last_error());
+					$routeResults['error'][$key] = $this->_getJsonError(json_last_error());
 				}else{
 					if($json['status'] == 'OK'){
-						foreach($json['rows'] as $row){
-							foreach($row['elements'] as $element){
-								if($element['status'] == 'OK'){
-									$distance += (int) $element['distance']['value'];
-									$duration += (int) $element['duration']['value'];
-								}else{
-									if(strpos($result['error'], $element['status']) === false){
-										$result['error'] .= $element['status'] . ' ';
-									}
-								}
-							}
-						}
+						$legs = $json['routes'][0]['legs'];
+
+						$routeResults[$key]['distance'] = $this->_calcLegsParam($legs, 'distance');
+
+						$routeResults[$key]['duration'] = $this->_calcLegsParam($legs, 'duration');
 					}else{
 						if(isset($json['error_message'])){
-							$result['error'] = $json['error_message'];
+							$routeResults[$key]['error'] = $json['error_message'];
 						}else{
-							$result['error'] = $json['status'];
+							$routeResults[$key]['error'] = $json['status'];
 						}
 					}
 				}
 			}
+		}
 
-			$result['error'] = trim($result['error']);
+		foreach($routeResults as $key => $routeResult){
+			if(isset($routeResult['distance'])){
+				if($distance === false || $distance > $routeResult['distance']){
+					$distance = $routeResult['distance'];
+					$duration = $routeResult['duration'];
+				}
+			}
+		}
 
+		if($distance && $duration){
 			$result['distance'] = $distance;
 			$result['time'] = $duration;
 		}else{
-			$distance = $duration = false;
+			$errors = array_unique(array_map(function($item){
+				return (int) $item['error'];
+			}, $routeResults));
 
-			$routeResults = [];
-
-			$url = 'https://maps.googleapis.com/maps/api/directions/json?';
-
-			foreach($destinations as $key => $dest){
-				$query =  http_build_query([
-					'units' => 'metric',
-					'origin' => $origins,
-					'destination' => $dest,
-					'waypoints' => 'optimize:true|' . $waypoints[$key],
-					'key' => getenv('GOOGLE_MAPS_API')
-				]);
-
-				$resource = file_get_contents($url . $query);
-
-				if($resource === false){
-					$routeResults['error'][$key] = 'CONNECTION_ERROR';
-				}else{
-					$json = json_decode($resource, true);
-
-					if($json === null && json_last_error() !== JSON_ERROR_NONE){
-						$routeResults['error'][$key] = $this->_getJsonError(json_last_error());
-					}else{
-						if($json['status'] == 'OK'){
-							$legs = $json['routes'][0]['legs'];
-
-							$routeResults[$key]['distance'] = $this->_calcLegsParam($legs, 'distance');
-
-							$routeResults[$key]['duration'] = $this->_calcLegsParam($legs, 'duration');
-						}else{
-							if(isset($json['error_message'])){
-								$routeResults[$key]['error'] = $json['error_message'];
-							}else{
-								$routeResults[$key]['error'] = $json['status'];
-							}
-						}
-					}
-				}
-			}
-
-			foreach($routeResults as $key => $routeResult){
-				if(isset($routeResult['distance'])){
-					if($distance === false || $distance > $routeResult['distance']){
-						$distance = $routeResult['distance'];
-						$duration = $routeResult['duration'];
-					}
-				}
-			}
-
-			if($distance && $duration){
-				$result['distance'] = $distance;
-				$result['time'] = $duration;
-			}else{
-				$errors = array_unique(array_map(function($item){
-					return (int) $item['error'];
-				}, $routeResults));
-
-				$result['errors'] = implode(' ', $errors);
-			}
+			$result['errors'] = implode(' ', $errors);
 		}
 
 		return $result;
