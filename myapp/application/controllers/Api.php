@@ -14,24 +14,27 @@ class Api extends CI_Controller {
 		show_404();
 	}
 
-	public function route($token = false) {
+	public function getRoute($token = false){
+		$result = $this->_getRouteByToken($token);
+
+		header('Content-Type: application/json');
+		echo json_encode( $result );
+	}
+
+	public function postRoute(){
 		$result = [];
 
-		if(!$token){
-			$inputBody = file_get_contents('php://input');
+		$inputBody = file_get_contents('php://input');
 
-			if($inputBody){
+		if($inputBody){
 
-				$validate = $this->_validateInput($inputBody);
+			$validate = $this->_validateInput($inputBody);
 
-				if($validate['success']){
-					$result = $this->_processRoute($validate['data']);
-				}else{
-					$result['error'] = $validate['error'];
-				}
+			if($validate['success']){
+				$result = $this->_processRoute($validate['data']);
+			}else{
+				$result['error'] = $validate['error'];
 			}
-		}else{
-			$result = $this->_getRouteByToken($token);
 		}
 
 		header('Content-Type: application/json');
